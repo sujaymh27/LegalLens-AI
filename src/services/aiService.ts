@@ -58,8 +58,8 @@ export async function askDocumentAI(
     language === 'hi'
       ? 'The user wishes to receive answers and explanations in Hindi (हिन्दी). Provide the explanation in Hindi while citing the English clause/page references.'
       : language === 'kn'
-      ? 'The user wishes to receive answers and explanations in Kannada (ಕನ್ನಡ). Provide the explanation in Kannada while citing the English clause/page references.'
-      : 'Provide the answer in clear, plain English.';
+        ? 'The user wishes to receive answers and explanations in Kannada (ಕನ್ನಡ). Provide the explanation in Kannada while citing the English clause/page references.'
+        : 'Provide the answer in clear, plain English.';
 
   const systemPrompt = `You are LegalLens AI, a professional legal information and document navigation assistant.
 Your purpose is to help ordinary users understand legal documents and legal information in simple language.
@@ -208,7 +208,7 @@ export function fallbackDocumentQA(question: string, doc: DocumentData, language
   const qLower = question.toLowerCase();
 
   // 1. Prioritize direct financial queries (amounts, deposits, rent, CTC)
-  const matchedAmount = doc.amounts.find(a => 
+  const matchedAmount = doc.amounts.find(a =>
     (qLower.includes('deposit') && a.label.toLowerCase().includes('deposit')) ||
     (qLower.includes('rent') && a.label.toLowerCase().includes('rent')) ||
     (qLower.includes('salary') && (a.label.toLowerCase().includes('salary') || a.label.toLowerCase().includes('ctc'))) ||
@@ -299,8 +299,8 @@ export function fallbackDocumentQA(question: string, doc: DocumentData, language
   const notFoundMsg = language === 'hi'
     ? 'मुझे अपलोड किए गए दस्तावेज़ में यह जानकारी नहीं मिली।\n\nयह सामान्य कानूनी जानकारी है, कानूनी सलाह नहीं। अपनी विशिष्ट स्थिति के लिए योग्य कानूनी पेशेवर से परामर्श करें।'
     : language === 'kn'
-    ? 'ಅಪ್‌ಲೋಡ್ ಮಾಡಲಾದ ದಾಖಲೆಯಲ್ಲಿ ಈ ಮಾಹಿತಿಯನ್ನು ಪತ್ತೆಹಚ್ಚಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.\n\nಇದು ಸಾಮಾನ್ಯ ಕಾನೂನು ಮಾಹಿತಿಯಾಗಿದೆ, ಕಾನೂನು ಸಲಹೆಯಲ್ಲ. ನಿರ್ದಿಷ್ಟ ಪರಿಸ್ಥಿತಿಗಾಗಿ ಅರ್ಹ ವಕೀಲರನ್ನು ಸಂಪರ್ಕಿಸಿ.'
-    : 'I could not locate this information in the uploaded document.\n\nIf you have questions about general legal principles or terms outside this agreement, I can provide general legal information, but for specific legal counseling, please consult a qualified legal professional.';
+      ? 'ಅಪ್‌ಲೋಡ್ ಮಾಡಲಾದ ದಾಖಲೆಯಲ್ಲಿ ಈ ಮಾಹಿತಿಯನ್ನು ಪತ್ತೆಹಚ್ಚಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.\n\nಇದು ಸಾಮಾನ್ಯ ಕಾನೂನು ಮಾಹಿತಿಯಾಗಿದೆ, ಕಾನೂನು ಸಲಹೆಯಲ್ಲ. ನಿರ್ದಿಷ್ಟ ಪರಿಸ್ಥಿತಿಗಾಗಿ ಅರ್ಹ ವಕೀಲರನ್ನು ಸಂಪರ್ಕಿಸಿ.'
+      : 'I could not locate this information in the uploaded document.\n\nIf you have questions about general legal principles or terms outside this agreement, I can provide general legal information, but for specific legal counseling, please consult a qualified legal professional.';
 
   return {
     answer: notFoundMsg,

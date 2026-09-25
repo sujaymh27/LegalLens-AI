@@ -1,18 +1,16 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DocumentData, SupportedLanguage } from './types';
 import { Header } from './components/Header';
 import { OverviewTab } from './components/OverviewTab';
+import { DocumentUploadModal } from './components/DocumentUploadModal';
+import { ClausesTab } from './components/ClausesTab';
+import { AskDocumentTab } from './components/AskDocumentTab';
+import { ComparisonTab } from './components/ComparisonTab';
+import { LegalNoticeTab } from './components/LegalNoticeTab';
+import { LawyerBriefTab } from './components/LawyerBriefTab';
+import { SettingsTab } from './components/SettingsTab';
 import { SAMPLE_RENTAL_AGREEMENT, SAMPLE_EMPLOYMENT_CONTRACT, SAMPLE_LEGAL_NOTICE } from './services/sampleDocuments';
 import { TRANSLATIONS } from './services/localization';
-
-// Lazy-load secondary views to reduce initial bundle and boost efficiency
-const DocumentUploadModal = lazy(() => import('./components/DocumentUploadModal').then(m => ({ default: m.DocumentUploadModal })));
-const ClausesTab = lazy(() => import('./components/ClausesTab').then(m => ({ default: m.ClausesTab })));
-const AskDocumentTab = lazy(() => import('./components/AskDocumentTab').then(m => ({ default: m.AskDocumentTab })));
-const ComparisonTab = lazy(() => import('./components/ComparisonTab').then(m => ({ default: m.ComparisonTab })));
-const LegalNoticeTab = lazy(() => import('./components/LegalNoticeTab').then(m => ({ default: m.LegalNoticeTab })));
-const LawyerBriefTab = lazy(() => import('./components/LawyerBriefTab').then(m => ({ default: m.LawyerBriefTab })));
-const SettingsTab = lazy(() => import('./components/SettingsTab').then(m => ({ default: m.SettingsTab })));
 
 export const App: React.FC = () => {
   const [currentLanguage, setCurrentLanguage] = useState<SupportedLanguage>('en');
@@ -247,13 +245,8 @@ export const App: React.FC = () => {
               </div>
             </div>
           ) : (
-            /* Active Document Views with code-splitting */
-            <Suspense fallback={
-              <div className="tab-suspense-fallback" role="status" aria-live="polite" style={{ padding: '3rem 1rem', textAlign: 'center' }}>
-                <div className="bw-loading-spinner" style={{ margin: '0 auto 12px' }} />
-                <p style={{ fontSize: '0.9rem', color: '#4b5563', fontWeight: 500 }}>Loading section...</p>
-              </div>
-            }>
+            /* Active Document Views with instant synchronous rendering */
+            <>
               {activeTab === 'overview' && (
                 <OverviewTab
                   document={activeDocument}
@@ -316,20 +309,18 @@ export const App: React.FC = () => {
                   onResetSession={handleResetSession}
                 />
               )}
-            </Suspense>
+            </>
           )}
         </main>
       </div>
 
-      {/* Upload Modal with code-splitting */}
-      <Suspense fallback={null}>
-        <DocumentUploadModal
-          isOpen={isUploadModalOpen}
-          onClose={() => setIsUploadModalOpen(false)}
-          onDocumentLoaded={handleDocumentLoaded}
-          currentLanguage={currentLanguage}
-        />
-      </Suspense>
+      {/* Upload Modal */}
+      <DocumentUploadModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        onDocumentLoaded={handleDocumentLoaded}
+        currentLanguage={currentLanguage}
+      />
     </div>
   );
 };

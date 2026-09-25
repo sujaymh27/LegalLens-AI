@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import {
   askDocumentAI,
   extractCitationsFromText,
@@ -17,6 +17,20 @@ import {
 describe('AI Q&A & Resilient Legal Engine Service', () => {
   beforeEach(() => {
     clearAICache();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: 'According to Page 1, Clause 3, the monthly rent is Rs. 35,000. This is general legal information, not legal advice.'
+          }
+        }]
+      })
+    }));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   describe('Cache Mechanism & Performance Optimization', () => {

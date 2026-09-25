@@ -1,3 +1,5 @@
+import mammoth from 'mammoth';
+import { createWorker } from 'tesseract.js';
 import { DocumentData, DocumentType, ClauseItem, FinancialAmount, ImportantDate, DocumentParty, SignatureInfo } from '../types';
 import { scanSensitiveData } from './privacyScanner';
 
@@ -22,8 +24,6 @@ export async function processUploadedFile(
     onProgress?.('Extracting document contents from DOCX structure...');
     const arrayBuffer = await file.arrayBuffer();
     try {
-      const mammothModule = await import('mammoth');
-      const mammoth = (mammothModule as any).default || mammothModule;
       const result = await mammoth.extractRawText({ arrayBuffer });
       rawText = result.value;
     } catch {
@@ -75,7 +75,6 @@ export async function processUploadedFile(
     onProgress?.('Running OCR on scanned photo or camera image...');
     isOcr = true;
     try {
-      const { createWorker } = await import('tesseract.js');
       const worker = await createWorker('eng');
       const ret = await worker.recognize(file);
       rawText = ret.data.text;
