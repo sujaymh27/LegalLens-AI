@@ -36,13 +36,16 @@ export const AskDocumentTab: React.FC<AskDocumentTabProps> = ({
   ]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageSeqRef = useRef(1);
+  const prevPromptRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
   useEffect(() => {
-    if (initialQuestionPrompt) {
+    if (initialQuestionPrompt && initialQuestionPrompt !== prevPromptRef.current) {
+      prevPromptRef.current = initialQuestionPrompt;
       setInputQuestion(
         currentLanguage === 'hi'
           ? `${initialQuestionPrompt} के बारे में बताएं`
@@ -78,11 +81,12 @@ export const AskDocumentTab: React.FC<AskDocumentTabProps> = ({
     const textToSend = questionText || inputQuestion.trim();
     if (!textToSend || isLoading) return;
 
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
+      id: `user-${messageSeqRef.current++}`,
       sender: 'user',
       text: textToSend,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      timestamp: timeStr
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -93,7 +97,7 @@ export const AskDocumentTab: React.FC<AskDocumentTabProps> = ({
       const response = await askDocumentAI(textToSend, document, currentLanguage);
 
       const assistantMessage: ChatMessage = {
-        id: `ai-${Date.now()}`,
+        id: `ai-${messageSeqRef.current++}`,
         sender: 'assistant',
         text: response.answer,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -104,7 +108,7 @@ export const AskDocumentTab: React.FC<AskDocumentTabProps> = ({
       setMessages(prev => [...prev, assistantMessage]);
     } catch {
       const errorMessage: ChatMessage = {
-        id: `err-${Date.now()}`,
+        id: `err-${messageSeqRef.current++}`,
         sender: 'assistant',
         text: currentLanguage === 'hi'
           ? 'मुझे अपलोड किए गए दस्तावेज़ में यह जानकारी नहीं मिली।\n\nयह कानूनी जानकारी है, कानूनी सलाह नहीं।'

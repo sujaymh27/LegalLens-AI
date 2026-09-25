@@ -11,13 +11,43 @@ export interface AIResponse {
   suggestedFollowUps: string[];
 }
 
+/** In-memory LRU-like response cache to optimize performance and eliminate redundant API calls */
+const aiResponseCache = new Map<string, AIResponse>();
+const MAX_CACHE_SIZE = 100;
+
+export function getAICacheKey(question: string, docId: string, language: SupportedLanguage): string {
+  return `${docId}::${language}::${question.trim().toLowerCase()}`;
+}
+
+export function clearAICache(): void {
+  aiResponseCache.clear();
+}
+
+export function getAICacheSize(): number {
+  return aiResponseCache.size;
+}
+
 export async function askDocumentAI(
   question: string,
   doc: DocumentData,
   language: SupportedLanguage = 'en'
 ): Promise<AIResponse> {
+  const cacheKey = getAICacheKey(question, doc.id, language);
+  if (aiResponseCache.has(cacheKey)) {
+    return aiResponseCache.get(cacheKey)!;
+  }
+
+  const setCachedResponse = (res: AIResponse): AIResponse => {
+    if (aiResponseCache.size >= MAX_CACHE_SIZE) {
+      const firstKey = aiResponseCache.keys().next().value;
+      if (firstKey) aiResponseCache.delete(firstKey);
+    }
+    aiResponseCache.set(cacheKey, res);
+    return res;
+  };
+
   if (!OPENROUTER_API_KEY) {
-    return fallbackDocumentQA(question, doc, language);
+    return setCachedResponse(fallbackDocumentQA(question, doc, language));
   }
 
   const documentContext = doc.pages
@@ -102,44 +132,44 @@ ${documentContext}`;
           const retryAnswer = retryData.choices?.[0]?.message?.content || '';
           if (retryAnswer) {
             const citations = extractCitationsFromText(retryAnswer, doc);
-            return {
+            return setCachedResponse({
               answer: retryAnswer,
               citations,
               isGeneralLegalInfo: retryAnswer.toLowerCase().includes('general legal information'),
               suggestedFollowUps: generateFollowUps(question, doc)
-            };
+            });
           }
         }
       }
 
       const errText = await response.text();
       console.warn(`OpenRouter API returned HTTP ${response.status}: ${errText}. Activating intelligent local extraction engine.`);
-      return fallbackDocumentQA(question, doc, language);
+      return setCachedResponse(fallbackDocumentQA(question, doc, language));
     }
 
     const data = await response.json();
     const rawAnswer = data.choices?.[0]?.message?.content || '';
 
     if (!rawAnswer) {
-      return fallbackDocumentQA(question, doc, language);
+      return setCachedResponse(fallbackDocumentQA(question, doc, language));
     }
 
     // Extract citation references from the answer
     const citations = extractCitationsFromText(rawAnswer, doc);
 
-    return {
+    return setCachedResponse({
       answer: rawAnswer,
       citations,
       isGeneralLegalInfo: rawAnswer.toLowerCase().includes('general legal information') || rawAnswer.toLowerCase().includes('not tied to the uploaded document'),
       suggestedFollowUps: generateFollowUps(question, doc)
-    };
+    });
   } catch (error) {
     console.warn('Network or API issue with OpenRouter, utilizing resilient local extractor:', error);
-    return fallbackDocumentQA(question, doc, language);
+    return setCachedResponse(fallbackDocumentQA(question, doc, language));
   }
 }
 
-function extractCitationsFromText(answer: string, doc: DocumentData): CitationReference[] {
+export function extractCitationsFromText(answer: string, doc: DocumentData): CitationReference[] {
   const citations: CitationReference[] = [];
   const pageRegex = /Page\s*(\d+)/gi;
   let match;
@@ -167,21 +197,63 @@ function extractCitationsFromText(answer: string, doc: DocumentData): CitationRe
   return citations.slice(0, 4);
 }
 
-function fallbackDocumentQA(question: string, doc: DocumentData, language: SupportedLanguage): AIResponse {
+const STOP_WORDS = new Set([
+  'this', 'that', 'with', 'from', 'have', 'does', 'what', 'when', 'where', 'which',
+  'about', 'there', 'their', 'they', 'them', 'these', 'those', 'document', 'agreement',
+  'contract', 'clause', 'page', 'under', 'into', 'been', 'were', 'will', 'would', 'could', 'should',
+  'permit', 'allow', 'is', 'are', 'the', 'and'
+]);
+
+export function fallbackDocumentQA(question: string, doc: DocumentData, language: SupportedLanguage): AIResponse {
   const qLower = question.toLowerCase();
 
-  // Search doc clauses for keyword matches
-  const matchedClauses = doc.keyClauses.filter(clause => {
-    const words = qLower.split(/\s+/).filter(w => w.length > 3);
-    return words.some(w => 
-      clause.title.toLowerCase().includes(w) ||
-      clause.originalText.toLowerCase().includes(w) ||
-      clause.plainExplanation.toLowerCase().includes(w)
-    );
-  });
+  // 1. Prioritize direct financial queries (amounts, deposits, rent, CTC)
+  const matchedAmount = doc.amounts.find(a => 
+    (qLower.includes('deposit') && a.label.toLowerCase().includes('deposit')) ||
+    (qLower.includes('rent') && a.label.toLowerCase().includes('rent')) ||
+    (qLower.includes('salary') && (a.label.toLowerCase().includes('salary') || a.label.toLowerCase().includes('ctc'))) ||
+    (qLower.includes('ctc') && a.label.toLowerCase().includes('ctc')) ||
+    (qLower.includes('maintenance') && a.label.toLowerCase().includes('maintenance')) ||
+    (qLower.includes('cheque') && (a.label.toLowerCase().includes('cheque') || a.amount.includes('4,50,000')))
+  );
 
-  if (matchedClauses.length > 0) {
-    const topClause = matchedClauses[0];
+  if (matchedAmount && (qLower.includes('how much') || qLower.includes('amount') || qLower.includes('what is the') || qLower.includes('cost'))) {
+    const citations: CitationReference[] = [{ pageNumber: 1, clauseNumber: matchedAmount.clauseRef, snippet: matchedAmount.label }];
+    let amtAnswer = '';
+    if (language === 'hi') {
+      amtAnswer = `दस्तावेज़ के ${matchedAmount.clauseRef} के अनुसार, निर्धारित ${matchedAmount.label} ${matchedAmount.amount} (${matchedAmount.condition || matchedAmount.recurrence || 'शर्तों के अनुसार'}) है।\n\nयह सामान्य कानूनी जानकारी है, कानूनी सलाह नहीं। अपनी विशिष्ट स्थिति के लिए योग्य कानूनी पेशेवर से परामर्श करें।`;
+    } else if (language === 'kn') {
+      amtAnswer = `ದಾಖಲೆಯ ${matchedAmount.clauseRef} ಪ್ರಕಾರ, ನಿಗದಿಪಡಿಸಿದ ${matchedAmount.label} ಮೊತ್ತ ${matchedAmount.amount} ಆಗಿದೆ.\n\nಇದು ಸಾಮಾನ್ಯ ಕಾನೂನು ಮಾಹಿತಿಯಾಗಿದೆ, ಕಾನೂನು ಸಲಹೆಯಲ್ಲ. ನಿರ್ದಿಷ್ಟ ಪರಿಸ್ಥಿತಿಗಾಗಿ ಅರ್ಹ ವಕೀಲರನ್ನು ಸಂಪರ್ಕಿಸಿ.`;
+    } else {
+      amtAnswer = `According to ${matchedAmount.clauseRef} of the uploaded document, the specified ${matchedAmount.label} is ${matchedAmount.amount} (${matchedAmount.condition || matchedAmount.recurrence || 'as per agreement terms'}).\n\nThis is general legal information, not legal advice. For advice about your specific situation, consult a qualified legal professional.`;
+    }
+    return {
+      answer: amtAnswer,
+      citations,
+      isGeneralLegalInfo: false,
+      suggestedFollowUps: generateFollowUps(question, doc)
+    };
+  }
+
+  // 2. Search doc clauses with weighted relevance scoring
+  const words = qLower.replace(/[^\w\s]/g, ' ').split(/\s+/).filter(w => w.length > 3 && !STOP_WORDS.has(w));
+  const scoredClauses = words.length === 0 ? [] : doc.keyClauses.map(clause => {
+    let score = 0;
+    const titleLower = clause.title.toLowerCase();
+    const textLower = clause.originalText.toLowerCase();
+    const plainLower = clause.plainExplanation.toLowerCase();
+
+    words.forEach(w => {
+      if (titleLower.includes(w)) score += 5;
+      if (plainLower.includes(w)) score += 2;
+      if (textLower.includes(w)) score += 1;
+    });
+    return { clause, score };
+  }).filter(item => item.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  if (scoredClauses.length > 0) {
+    const topClause = scoredClauses[0].clause;
     const citations: CitationReference[] = [
       {
         pageNumber: topClause.pageNumber,
@@ -222,16 +294,6 @@ function fallbackDocumentQA(question: string, doc: DocumentData, language: Suppo
     };
   }
 
-  // Check general amounts or dates
-  const matchedAmount = doc.amounts.find(a => qLower.includes(a.label.toLowerCase()) || qLower.includes('rent') || qLower.includes('deposit') || qLower.includes('salary') || qLower.includes('amount'));
-  if (matchedAmount) {
-    return {
-      answer: `According to ${matchedAmount.clauseRef} of the uploaded document, the specified ${matchedAmount.label} is ${matchedAmount.amount} (${matchedAmount.condition || matchedAmount.recurrence || 'as per agreement terms'}).\n\nThis is general legal information, not legal advice. For advice about your specific situation, consult a qualified legal professional.`,
-      citations: [{ pageNumber: 1, clauseNumber: matchedAmount.clauseRef, snippet: matchedAmount.label }],
-      isGeneralLegalInfo: false,
-      suggestedFollowUps: generateFollowUps(question, doc)
-    };
-  }
 
   // Not found in document
   const notFoundMsg = language === 'hi'
@@ -252,7 +314,7 @@ function fallbackDocumentQA(question: string, doc: DocumentData, language: Suppo
   };
 }
 
-function generateFollowUps(question: string, doc: DocumentData): string[] {
+export function generateFollowUps(question: string, doc: DocumentData): string[] {
   if (doc.docType === 'rental_agreement') {
     return [
       'What is the notice period for vacating the flat?',

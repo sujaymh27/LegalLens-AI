@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clock, Calculator, AlertCircle, CheckCircle2, Calendar, ArrowRight, Info } from 'lucide-react';
+import { Clock, Calculator, AlertCircle, CheckCircle2, Calendar, Info } from 'lucide-react';
 import { DocumentData, SupportedLanguage, ObligationItem } from '../types';
 import { extractObligationsFromDocument, computeEventDeadline } from '../services/obligationTracker';
 import { TRANSLATIONS } from '../services/localization';

@@ -31,7 +31,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
     setOpenClauses(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const scrollToClause = (clauseId: string) => {
+  const scrollToClause = (_clauseId: string) => {
     onNavigateToTab('clauses');
   };
 

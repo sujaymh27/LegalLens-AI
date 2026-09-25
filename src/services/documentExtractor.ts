@@ -1,5 +1,3 @@
-import mammoth from 'mammoth';
-import { createWorker } from 'tesseract.js';
 import { DocumentData, DocumentType, ClauseItem, FinancialAmount, ImportantDate, DocumentParty, SignatureInfo } from '../types';
 import { scanSensitiveData } from './privacyScanner';
 
@@ -24,6 +22,8 @@ export async function processUploadedFile(
     onProgress?.('Extracting document contents from DOCX structure...');
     const arrayBuffer = await file.arrayBuffer();
     try {
+      const mammothModule = await import('mammoth');
+      const mammoth = (mammothModule as any).default || mammothModule;
       const result = await mammoth.extractRawText({ arrayBuffer });
       rawText = result.value;
     } catch {
@@ -75,6 +75,7 @@ export async function processUploadedFile(
     onProgress?.('Running OCR on scanned photo or camera image...');
     isOcr = true;
     try {
+      const { createWorker } = await import('tesseract.js');
       const worker = await createWorker('eng');
       const ret = await worker.recognize(file);
       rawText = ret.data.text;
@@ -151,7 +152,7 @@ export async function processUploadedFile(
   };
 }
 
-function detectDocumentType(text: string): DocumentType {
+export function detectDocumentType(text: string): DocumentType {
   const t = text.toLowerCase();
   
   if (t.includes('statutory notice') || t.includes('section 138') || t.includes('legal notice') || t.includes('advocate') && t.includes('hereby call upon you')) {
@@ -178,7 +179,7 @@ function detectDocumentType(text: string): DocumentType {
   return 'general';
 }
 
-function partitionTextIntoPages(text: string): Array<{ pageNumber: number; text: string }> {
+export function partitionTextIntoPages(text: string): Array<{ pageNumber: number; text: string }> {
   const pageDelimiterMatches = text.split(/(?:--- PAGE \d+ ---|Page \d+ of \d+|\f)/i);
   if (pageDelimiterMatches.length > 1) {
     return pageDelimiterMatches
@@ -207,7 +208,7 @@ function partitionTextIntoPages(text: string): Array<{ pageNumber: number; text:
   return pages.length > 0 ? pages : [{ pageNumber: 1, text }];
 }
 
-function extractParties(text: string, docType: DocumentType): DocumentParty[] {
+export function extractParties(text: string, docType: DocumentType): DocumentParty[] {
   const parties: DocumentParty[] = [];
 
   // Patterns for Lessor/Lessee, Employer/Employee, Advocate/Recipient
@@ -255,7 +256,7 @@ function extractParties(text: string, docType: DocumentType): DocumentParty[] {
   return parties;
 }
 
-function extractImportantDates(text: string): ImportantDate[] {
+export function extractImportantDates(text: string): ImportantDate[] {
   const dates: ImportantDate[] = [];
   let id = 1;
 
@@ -293,11 +294,11 @@ function extractImportantDates(text: string): ImportantDate[] {
   return dates;
 }
 
-function extractFinancialAmounts(text: string): FinancialAmount[] {
+export function extractFinancialAmounts(text: string): FinancialAmount[] {
   const amounts: FinancialAmount[] = [];
   let id = 1;
 
-  const moneyRegex = /(?:Rs\.?|INR|₹)\s*([\d,]+(?:\.\d{2})?|-?)\s*(?:\/-\s*)?(?:\((?:Rupees\s+)?([^\)]+)\))?/gi;
+  const moneyRegex = /(?:Rs\.?|INR|₹)\s*([\d,]+(?:\.\d{2})?|-?)\s*(?:\/-\s*)?(?:\((?:Rupees\s+)?([^)]+)\))?/gi;
   let match;
   const seen = new Set<string>();
 
@@ -382,6 +383,14 @@ function extractKeyClauses(text: string, pages: Array<{ pageNumber: number; text
 
 function generateQuickPlainExplanation(text: string, docType: DocumentType): string {
   const t = text.toLowerCase();
+  if (docType === 'legal_notice') {
+    if (t.includes('section 138') || t.includes('cheque')) {
+      return 'Statutory legal demand under Section 138 NI Act mandating payment within 15 days of notice receipt.';
+    }
+    if (t.includes('demand') || t.includes('cause of action')) {
+      return 'Formal legal claim asserting financial liability and notifying impending civil or criminal litigation.';
+    }
+  }
   if (t.includes('rent') || t.includes('payable')) {
     return 'Specifies payment obligations, due dates, and default conditions for monthly consideration.';
   }
